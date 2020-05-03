@@ -13,7 +13,7 @@ import (
     "time"
 
     "github.com/3th1nk/cidr"
-    "github.com/json-iterator/go"
+    jsoniter "github.com/json-iterator/go"
     "github.com/panjf2000/ants/v2"
     "github.com/valyala/fasthttp"
 )
@@ -48,6 +48,7 @@ type verboseStruct struct {
     Server      string `json:"server"`
     ContentType string `json:"content_type"`
     Location    string `json:"location"`
+    Title       string `json:"title,omitempty"` // title is omitted if empty, watch out
 }
 
 func main() {
@@ -79,6 +80,9 @@ func main() {
 
     var verbose bool
     flag.BoolVar(&verbose, "v", false, "Turn on verbose")
+
+    var scrapeTitle bool
+    flag.BoolVar(&scrapeTitle, "title", false, "Scrape HTML page title when in verbose mode")
     flag.Parse()
 
     timeout = time.Duration(to) * time.Second
@@ -88,7 +92,7 @@ func main() {
     pool, _ := ants.NewPoolWithFunc(concurrency, func(i interface{}) {
         defer wg.Done()
         u := i.(string)
-        if success, v, _ := isWorking(u, verbose); success {
+        if success, v, _ := isWorking(u, verbose, scrapeTitle); success {
             if !verbose {
                 fmt.Println(u)
             } else {
@@ -221,7 +225,14 @@ func initClient() {
     }
 }
 
-func isWorking(url string, verbose bool) (bool, *verboseStruct, error) {
+/* regex to match HTML title from page content */
+var rgxTitle *regexp.Regexp
+
+func init() {
+    rgxTitle = regexp.MustCompile(`<[Tt][Ii][Tt][Ll][Ee][^>]*>([^<]*)</[Tt][Ii][Tt][Ll][Ee]>`)
+}
+
+func isWorking(url string, verbose bool, scrapeTitle bool) (bool, *verboseStruct, error) {
     var v *verboseStruct
     req := fasthttp.AcquireRequest()
     defer fasthttp.ReleaseRequest(req)
@@ -230,7 +241,7 @@ func isWorking(url string, verbose bool) (bool, *verboseStruct, error) {
 
     resp := fasthttp.AcquireResponse()
     defer fasthttp.ReleaseResponse(resp)
-    resp.SkipBody = true
+    resp.SkipBody = !(verbose && scrapeTitle) // response body is read when scraping HTML page title
 
     err := doRequestTimeout(req, resp)
     if err != nil {
@@ -240,12 +251,22 @@ func isWorking(url string, verbose bool) (bool, *verboseStruct, error) {
         server := resp.Header.Peek(fasthttp.HeaderServer)
         contentType := resp.Header.Peek(fasthttp.HeaderContentType)
         location := resp.Header.Peek(fasthttp.HeaderLocation)
+
+        // scrape HTML title
+        rBody := resp.Body()
+        titleMatch := rgxTitle.FindSubmatch(rBody)
+        var title []byte
+        if len(titleMatch) > 0 {
+            title = titleMatch[1]
+        }
+
         v = &verboseStruct{
             Site:        url,
             StatusCode:  resp.StatusCode(),
             Server:      string(server),
             ContentType: string(contentType),
             Location:    string(location),
+            Title:       string(title),
         }
     }
     return true, v, nil
