@@ -11,23 +11,25 @@ GO111MODULE=on go get -u github.com/theblackturtle/fprobe
 - Optimize RAM and CPU in runtime.
 - Support special ports for each domain
 - Verbose in JSON format with some additional headers, such as `Status Code`, `Content Type`, `Location`.
+- Optionally scrape HTML page title
  
 ## Usage
 ```
 Usage of fprobe:
   -c int
-        Concurrency (default 50)
+            Concurrency (default 50)
   -cidr
-        Generate IP addresses from CIDR
+            Generate IP addresses from CIDR
   -i string
-        Input file (default is stdin) (default "-")
-  -l    Use ports in the same line (google.com,2087,2086)
+            Input file (default is stdin) (default "-")
+  -l        Use ports in the same line (google.com,2087,2086)
   -p value
-        add additional probe (proto:port)
-  -s    skip the default probes (http:80 and https:443)
+            add additional probe (proto:port)
+  -s        skip the default probes (http:80 and https:443)
   -t int
-        Timeout (seconds) (default 9)
-  -v    Turn on verbose
+            Timeout (seconds) (default 9)
+  -v        Turn on verbose
+  -title    Scrape HTML page title when in verbose mode
 ```
 
 ### Basic Usage
@@ -106,6 +108,15 @@ The verbose output will be format in JSON format with some additional headers, s
 ```
 {"site":"http://google.com","status_code":301,"server":"gws","content_type":"text/html; charset=UTF-8","location":"http://www.google.com/"}
 {"site":"https://google.com","status_code":301,"server":"gws","content_type":"text/html; charset=UTF-8","location":"https://www.google.com/"}
+```
+Optionally, HTML page title can be scraped in verbose mode<br>
+NOTE: 'title' field will be omitted from resulting JSON if title is not found (e.g. empty page, or not HTML)
+```
+❯ cat domains.txt | fprobe -v -title
+```
+```
+{"site":"http://google.com","status_code":301,"server":"gws","content_type":"text/html; charset=UTF-8","location":"http://www.google.com/","title":"301 Moved"}
+{"site":"https://google.com","status_code":301,"server":"gws","content_type":"text/html; charset=UTF-8","location":"https://www.google.com/","title":"301 Moved"}
 ```
 
 ## Credit
